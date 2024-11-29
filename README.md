@@ -1,4 +1,4 @@
-# Raspberry Pi Pico W Environmental Monitoring System
+# PicoTemp
 
 This project implements a compact, Wi-Fi-enabled environmental monitoring system using the Raspberry Pi Pico W. The device measures temperature and pressure using the SPL06-007 sensor and displays information on a 1.5" OLED screen. It also serves data over a local web server.
 
