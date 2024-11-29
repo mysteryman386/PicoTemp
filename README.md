@@ -49,36 +49,38 @@ This project implements a compact, Wi-Fi-enabled environmental monitoring system
 
 1.  Install the [Arduino Pico core](https://github.com/earlephilhower/arduino-pico) from Earle F. Philhower
 2. Install the required libraries using the Arduino Library Manager.
-4. Clone or download this repository and open `v2.ino` in the Arduino IDE.
-5. Configure your Wi-Fi credentials in the `secrets.h` file:
+3. Clone or download this repository and open `v2.ino` in the Arduino IDE.
+4. Configure your Wi-Fi credentials in the `secrets.h` file:
    ```cpp
    #define WIFI_SSID "Your_SSID"
    #define WIFI_PASS "Your_PASSWORD"
 
-4.Adjust customizable settings in secrets.h:
-  ```cpp
-  const unsigned long screensaverInterval = 600000; // 10 minutes
-  const bool beeperEnabled = false;                 // Disable/enable beep
+5. Adjust customizable settings in secrets.h:
+   ```cpp
+   const unsigned long screensaverInterval = 600000;
+   const bool beeperEnabled = false;
 
-5.Upload the code to your Raspberry Pi Pico W using the Arduino IDE.
+6. Upload the code to your Raspberry Pi Pico W using the Arduino IDE.
 ---
-###Usage
+### Usage
 **Device Startup**
--Upon boot, the device initializes the sensors and attempts to connect to the configured Wi-Fi network.
--The OLED screen will display the assigned IP address and a unique token for access.
+- Upon boot, the device initializes the sensors and attempts to connect to the configured Wi-Fi network.
+- The OLED screen will display the assigned IP address and a unique token for access.
+
 **Accessing Data**
--Use a browser or application to send HTTP GET requests to the device's IP.
+- Use a browser or application to send HTTP GET requests to the device's IP.
+
 **Example endpoints:**
--/: Retrieves temperature and pressure data in JSON format.
 ```bash
   http://[IP_ADDRESS]/?token=[DEVICE_TOKEN]
-
--/welcome: Displays the welcome screen.
--/reboot: Reboots the device (requires token).
--/bugCheck: Triggers a simulated error (developer mode only).
+```
+- `/`: Retrieves temperature and pressure data in JSON format (requires token).
+- `/welcome`: Displays the welcome screen.
+- `/reboot`: Reboots the device (requires token).
+- `/bugCheck`: Triggers a simulated error (developer mode only).
 
 **Example Output**
--JSON response from /:
+- JSON response from /:
 
 ```json
   {
@@ -87,11 +89,11 @@ This project implements a compact, Wi-Fi-enabled environmental monitoring system
     "tempF": 74.21,
     "airPressure": 1013.25
   }
-
+```
 **Screensaver**
-The OLED will blank after the interval defined in screensaverInterval to prevent burn-in.
+- The OLED will blank after the interval defined in screensaverInterval to prevent burn-in.
 ---
-###Troubleshooting
-**Wi-Fi Connection Fails:** Ensure correct SSID/password and that the network operates on 2.4 GHz.
-**Invalid Token:** Verify the token displayed on the device during startup.
-**Sensor Issues:** Check I2C connections and ensure the SPL06-007 is powered.
+### Troubleshooting
+- **Wi-Fi Connection Fails:** Ensure correct SSID/password and that the network operates on 2.4 GHz.
+- **Invalid Token:** Verify the token displayed on the device during startup.
+- **Sensor Issues:** Check I2C connections and ensure the SPL06-007 is powered.
