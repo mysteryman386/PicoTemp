@@ -5,13 +5,14 @@
 #include <WebServer.h>
 #include <LEAmDNS.h>
 #include <ArduinoJson.h>
+#include <EEPROM.h>
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1351.h>
 #include <SPI.h>
 #include <UptimeString.h>
 #include <HTTPClient.h>
-
+#include "secrets.h"
 
 
 //Screensaver to prevent OLED burn in
@@ -43,8 +44,17 @@ int watchdogIncrement;
 float tempC;
 float tempF;
 float pressure;
+float altitude;
+float altitudeF;
 String exportedData;
 byte mac[6];
+
+unsigned long screensaverInterval = defaultScreensaverInterval;
+bool beeperEnabled = defaultbeeperEnabled;
+bool enableNonessentialErrorScreen = defaultenableNonessentialErrorScreen;
+bool enableStatReadouts = defaultenableStatReadouts;
+double localPressure = defaultlocalPressure;
+
 
 
 Adafruit_SSD1351 tft = Adafruit_SSD1351(SCREEN_WIDTH, SCREEN_HEIGHT, &SPI, CS_PIN, DC_PIN, RST_PIN);
@@ -56,7 +66,7 @@ UptimeString uptimeString;
 
 
 
-void criticalScreen(String lineOne, String lineTwo, bool devMessage) {
+void criticalScreen(String lineOne, String lineTwo) {
   tft.fillScreen(RED);
   tft.setCursor(0, 0);
   tft.println("ERROR!\n");
@@ -77,14 +87,42 @@ void criticalScreen(String lineOne, String lineTwo, bool devMessage) {
   tft.println(mac[5], HEX);
   tft.println("Serial Number:");
   tft.println(serialID);
-  if (devMessage == true) {
+  if (developerTools == true) {
     tft.println("DevTools On\nReprogam to disable.\n");
   }
   delay(10000);
   *((volatile uint32_t*)(PPB_BASE + 0x0ED0C)) = 0x5FA0004;
 }
 
-void welcomeScreen(bool devMessage) {
+void informationalScreen(String lineOne, String lineTwo) {
+  tft.fillScreen(YELLOW);
+  tft.setCursor(0, 0);
+  tft.println("INFO PROMPT!\n");
+  tft.println(lineOne);
+  tft.println("INFO PROMPT!\n");
+  tft.println(lineTwo);
+  WiFi.macAddress(mac);
+  tft.print(mac[0], HEX);
+  tft.print(":");
+  tft.print(mac[1], HEX);
+  tft.print(":");
+  tft.print(mac[2], HEX);
+  tft.print(":");
+  tft.print(mac[3], HEX);
+  tft.print(":");
+  tft.print(mac[4], HEX);
+  tft.print(":");
+  tft.println(mac[5], HEX);
+  tft.println("Serial Number:");
+  tft.println(serialID);
+  if (developerTools == true) {
+    tft.println("DevTools On\nReprogam to disable.\n");
+  }
+  delay(10000);
+  *((volatile uint32_t*)(PPB_BASE + 0x0ED0C)) = 0x5FA0004;
+}
+
+void welcomeScreen() {
   tft.fillScreen(BLACK);
   tft.setCursor(0, 0);
   tft.print("Assigned IP Address:\n");
@@ -107,7 +145,7 @@ void welcomeScreen(bool devMessage) {
   tft.print(mac[4], HEX);
   tft.print(":");
   tft.println(mac[5], HEX);
-  if (devMessage == true) {
+  if (developerTools == true) {
     tft.println("\nDevTools On\nReprogam to disable.\n");
   }
   previousInterval = currentInterval;
@@ -126,3 +164,184 @@ void handleNotFound() {
   server.send(404, "text/plain", "Error 404. Webpage not found.");
 }
 
+void beepInit() {
+  if (beeperEnabled == true) {
+    pinMode(22, OUTPUT);
+  };
+}
+
+void beepFunction(bool enable) {
+  if (beeperEnabled == true) {
+    if (enable == true) {
+      tone(22, 440);
+    } else if (enable == false) {
+      noTone(22);
+    }
+  }
+}
+
+String getData() {
+  digitalWrite(LED_BUILTIN, HIGH);
+
+  Serial.print("Current time: ");
+
+  tempC = get_temp_c();
+  tempF = get_temp_f();
+  pressure = get_pressure();
+  altitude = get_altitude(get_pressure(),localPressure);
+  altitudeF = get_altitude_f(get_pressure(),localPressure);
+
+  // ---- Temperature Values ----
+  Serial.print("Temperature: ");
+  Serial.print(tempC);
+  Serial.println(" C");
+
+  Serial.print("Temperature: ");
+  Serial.print(tempF);
+  Serial.println(" F");
+
+  // ---- Pressure Values ----
+  Serial.print("Measured Air Pressure: ");
+  Serial.print(pressure, 2);
+  Serial.println(" mb");
+  Serial.println("\n");
+
+  if (enableStatReadouts == true) {
+    tft.fillScreen(BLACK);
+    tft.setCursor(0, 0);
+    tft.println("Successful request!");
+    tft.print("Temperature: ");
+    tft.print(tempC);
+    tft.println(" C");
+
+    tft.print("Temperature: ");
+    tft.print(tempF);
+    tft.println(" F");
+
+    // ---- Pressure Values ----
+    tft.print("Measured Air Pressure");
+    tft.print(pressure, 2);
+    tft.println(" mb\n");
+
+    tft.println("Uptime as of this\nrequest:");
+    tft.println(UptimeString::getUptime3());
+
+    tft.println("\nAssigned IP Address:");
+    tft.println(WiFi.localIP());
+    previousInterval = currentInterval;
+  }
+
+  digitalWrite(LED_BUILTIN, LOW);  // Turn the LED off by making the voltage LOW
+
+  // Fill JSON data
+  data["sensor"] = "SPL06";
+  data["tempC"] = tempC;
+  data["tempF"] = tempF;
+  data["airPressure"] = pressure;
+  data["localAirPressure"] = localPressure;
+  data["altitudeM"] = altitude;
+  data["altitudeF"] = altitudeF;
+
+  // Serialize to JSON
+  serializeJsonPretty(data, exportedData);
+
+  return exportedData;
+}
+
+void handleData() {
+  String token = server.arg("token");
+  if (token == serialID) {
+    server.send(200, "application/json", getData() + "\r\n");
+  } else {
+    server.send(401, "text/plain", "Unauthorized access detected. Check the Diagnostic screen for more details and the token.");
+    if (enableNonessentialErrorScreen == true) {
+      tft.fillScreen(RED);
+      tft.setCursor(0, 0);
+      tft.println("!ACCESS DENIED!\n");
+      tft.println("Invalid request\ndetected!\n");
+      tft.println("Use this config for\nyour companion app:\n");
+      tft.println(WiFi.localIP());
+      tft.println("/?token=[token]\n");
+      tft.println("The token is:");
+      tft.println(serialID);
+      previousInterval = currentInterval;
+    }
+  }
+}
+
+
+void rebootSystem() {
+  String token = server.arg("token");
+  if (token == serialID) {
+    server.send(200, "text/plain", "Rebooting the system. Refer to the Diagnostic screen for more information.");
+    *((volatile uint32_t*)(PPB_BASE + 0x0ED0C)) = 0x5FA0004;
+  } else {
+    if (enableNonessentialErrorScreen == true) {
+      server.send(401, "text/plain", "Unauthorized access detected. Check the Diagnostic screen for more details and the token.");
+      tft.fillScreen(RED);
+      tft.setCursor(0, 0);
+      tft.println("!ACCESS DENIED!\n");
+      tft.println("Invalid request\ndetected!\n");
+      tft.println("Use this config for\nyour companion app:\n");
+      tft.println(WiFi.localIP());
+      tft.println("/reboot?token=[token]\n");
+      tft.println("The token is:");
+      tft.println(serialID);
+      previousInterval = currentInterval;
+    }
+  }
+}
+
+
+void testError() {
+  if (developerTools == true) {
+    server.send(200, "text/plain", "Bug check made!");
+    criticalScreen("Test bugcheck", "Test Bugcheck");
+  }
+  server.send(403, "text/plain", "Developer tools are off. Reenable developer tools in order to use this feature.");
+}
+
+#include <ArduinoJson.h> // For parsing JSON
+
+void handlePostUpdatePressure() {
+  if (server.method() != HTTP_POST) {
+    server.send(405, "text/plain", "Method Not Allowed");
+    return;
+  }
+
+  // Check if the request has a body
+  if (!server.hasArg("plain")) {
+    server.send(400, "text/plain", "Bad Request: Missing Body");
+    return;
+  }
+
+  // Parse JSON from the body
+  String body = server.arg("plain");
+  StaticJsonDocument<200> doc;
+  DeserializationError error = deserializeJson(doc, body);
+
+  if (error) {
+    server.send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+    return;
+  }
+
+  // Check for token
+  if (!doc.containsKey("token") || doc["token"].as<String>() != serialID) {
+    server.send(403, "application/json", "{\"error\":\"Forbidden: Invalid token\"}");
+    return;
+  }
+
+  // Check for pressure value
+  if (!doc.containsKey("pressure")) {
+    server.send(400, "application/json", "{\"error\":\"Missing 'pressure' field\"}");
+    return;
+  }
+
+  double new_pressure = doc["pressure"].as<double>();
+
+  // Update the local_pressure value
+  localPressure = new_pressure;
+
+  // Respond with success
+  server.send(200, "application/json", "{\"message\":\"Pressure updated successfully\",\"localPressure\":" + String(localPressure, 2) + "}");
+}
