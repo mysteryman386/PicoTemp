@@ -74,21 +74,43 @@ This project implements a compact, Wi-Fi-enabled environmental monitoring system
 ```bash
   http://[IP_ADDRESS]/?token=[DEVICE_TOKEN]
 ```
+***GET endpoints***
 - `/`: Retrieves temperature and pressure data in JSON format (requires token).
 - `/welcome`: Displays the welcome screen.
 - `/reboot`: Reboots the device (requires token).
 - `/bugCheck`: Triggers a simulated error (developer mode only).
-
+  
+***POST endpoints***
+- `/updatePressure`: Updates the localAirPressure value, which is required for altitude calculations (requires token)
+  
 **Example Output**
-- JSON response from /:
+- JSON response from `/`:
 
 ```json
   {
     "sensor": "SPL06",
     "tempC": 23.45,
     "tempF": 74.21,
-    "airPressure": 1013.25
+    "airPressure": 1013.25,
+    "localAirPressure": 1024.96,
+    "altitudeM": 72.38245,
+    "altitudeF": 237.4868
   }
+```
+- Example JSON packet for `/updatePressure`
+
+```
+{
+  "token": "lywEp67NbaDopdb3",
+  "pressure": 1015.6
+}
+```
+- Example JSON Response from the packet above
+```
+{
+   "message":"Pressure updated successfully",
+   "localPressure":1024.96
+}
 ```
 **Screensaver**
 - The OLED will blank after the interval defined in screensaverInterval to prevent burn-in.
